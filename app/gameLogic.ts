@@ -2,7 +2,14 @@
 
 import type { Card, CardColor, GameState } from "./types";
 import type { ColorScoreDetail, PlayerScore } from "./types";
-import { COLORS } from "./types";
+import { COLORS, COLOR_LABELS } from "./types";
+
+const MAX_LOGS = 5;
+
+function appendLog(state: GameState, message: string): string[] {
+  const prev = state.logs ?? [];
+  return [...prev, message].slice(-MAX_LOGS);
+}
 
 let cardIdCounter = 0;
 function nextId(): string {
@@ -58,6 +65,7 @@ export function createInitialState(): GameState {
     selectedCard: null,
     phase: "play",
     lastDiscardedColor: null,
+    logs: [],
   };
 }
 
@@ -102,6 +110,10 @@ export function canPlayCard(
   return false;
 }
 
+function cardLabel(card: Card): string {
+  return `${COLOR_LABELS[card.color]} ${card.value === "wager" ? "契約" : card.value}`;
+}
+
 export function playCard(
   state: GameState,
   card: Card,
@@ -109,26 +121,26 @@ export function playCard(
   color?: CardColor
 ): GameState {
   const next = { ...state };
-  // Player 1 の手札から削除
   next.player1Hand = state.player1Hand.filter((c) => c.id !== card.id);
   next.selectedCard = null;
 
   if (target === "discard" && color) {
     next.discardPiles = { ...state.discardPiles, [color]: [...state.discardPiles[color], card] };
     next.lastDiscardedColor = color;
+    next.logs = appendLog(state, `Player 1 discarded ${cardLabel(card)}`);
   } else if (target === "expedition" && color) {
     next.player1Expeditions = {
       ...state.player1Expeditions,
       [color]: [...state.player1Expeditions[color], card],
     };
     next.lastDiscardedColor = null;
+    next.logs = appendLog(state, `Player 1 played ${cardLabel(card)} to board`);
   }
 
   next.phase = "draw";
   return next;
 }
 
-// Player 2 用
 export function playCardP2(
   state: GameState,
   card: Card,
@@ -136,19 +148,20 @@ export function playCardP2(
   color?: CardColor
 ): GameState {
   const next = { ...state };
-  // Player 2 の手札から削除
   next.player2Hand = state.player2Hand.filter((c) => c.id !== card.id);
   next.selectedCard = null;
 
   if (target === "discard" && color) {
     next.discardPiles = { ...state.discardPiles, [color]: [...state.discardPiles[color], card] };
     next.lastDiscardedColor = color;
+    next.logs = appendLog(state, `Player 2 discarded ${cardLabel(card)}`);
   } else if (target === "expedition" && color) {
     next.player2Expeditions = {
       ...state.player2Expeditions,
       [color]: [...state.player2Expeditions[color], card],
     };
     next.lastDiscardedColor = null;
+    next.logs = appendLog(state, `Player 2 played ${cardLabel(card)} to board`);
   }
 
   next.phase = "draw";
@@ -179,6 +192,12 @@ export function drawCard(
   }
 
   if (drawn) {
+    const playerLabel = state.currentPlayer === "player1" ? "Player 1" : "Player 2";
+    if (source === "deck") {
+      next.logs = appendLog(state, `${playerLabel} drew from deck`);
+    } else {
+      next.logs = appendLog(state, `${playerLabel} drew from ${COLOR_LABELS[source]} discard`);
+    }
     if (state.currentPlayer === "player1") {
       next.player1Hand = [...state.player1Hand, drawn];
     } else {

@@ -37,8 +37,20 @@ function GameContent() {
   const { gameData, loading, error } = useGameRealtime(gameId);
   const [selectedCard, setSelectedCard] = useState<CardType | null>(null);
   const [resultModalOpen, setResultModalOpen] = useState(false);
+  const [discardModalColor, setDiscardModalColor] = useState<CardColor | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const prevDeckLength = useRef<number | null>(null);
+
+  // プレイ時間タイマー（created_at から経過 MM:SS）
+  useEffect(() => {
+    if (!gameData?.created_at) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [gameData?.created_at]);
+  const elapsedMs = gameData?.created_at ? now - new Date(gameData.created_at).getTime() : 0;
+  const elapsedSec = Math.max(0, Math.floor(elapsedMs / 1000));
+  const timerLabel = `${String(Math.floor(elapsedSec / 60)).padStart(2, "0")}:${String(elapsedSec % 60).padStart(2, "0")}`;
 
   const emptyPlayerScore = useMemo(() => getEmptyPlayerScore(), []);
 
@@ -269,8 +281,13 @@ function GameContent() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
         <h1 className="text-2xl font-bold text-center text-slate-100 drop-shadow-sm">Elemental Paths</h1>
+        {gameData?.created_at && (
+          <span className="text-slate-300 font-mono text-sm tabular-nums bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-600" title="プレイ時間">
+            ⏱ {timerLabel}
+          </span>
+        )}
         {gameOver && !resultModalOpen && (
           <button
             type="button"
@@ -323,6 +340,61 @@ function GameContent() {
         </div>
       </section>
 
+      {/* 捨て札モーダル：その色の捨て札をすべて表示・拾う/捨てる */}
+      {discardModalColor !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setDiscardModalColor(null)}>
+          <div
+            className="bg-slate-800 rounded-2xl shadow-2xl border-2 border-slate-600 max-w-lg w-full max-h-[85vh] overflow-auto p-6 text-slate-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold mb-2">{COLOR_LABELS[discardModalColor]} の捨て札</h2>
+            <p className="text-xs text-slate-400 mb-3">捨てられた順（下が古い・上が一番上）</p>
+            <div className="flex flex-wrap gap-2 mb-4 min-h-[4rem]">
+              {/* 配列は [古い…新しい]。表示は古い→新しいの順で並べる */}
+              {(state.discardPiles[discardModalColor] ?? []).map((c) => (
+                <Card key={c.id} card={c} compact />
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {isMyTurnDraw && drawOptions.includes(discardModalColor) && state.discardPiles[discardModalColor].length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDraw(discardModalColor);
+                    setDiscardModalColor(null);
+                  }}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-500 border border-slate-600 disabled:opacity-50"
+                >
+                  拾う（Draw）
+                </button>
+              )}
+              {isMyTurnPlay && selectedCard?.color === discardModalColor && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (myRole === "player1") void applyAndSave(playCard(state, selectedCard!, "discard", discardModalColor));
+                    if (myRole === "player2") void applyAndSave(playCardP2(state, selectedCard!, "discard", discardModalColor));
+                    setDiscardModalColor(null);
+                  }}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-lg bg-slate-600 text-slate-100 font-medium hover:bg-slate-500 border border-slate-500 disabled:opacity-50"
+                >
+                  ここに捨てる
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setDiscardModalColor(null)}
+                className="px-4 py-2 rounded-lg bg-slate-600 text-slate-200 font-medium hover:bg-slate-500 border border-slate-500"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 中央: 捨て札・山札 */}
       <section className="rounded-xl bg-slate-800/95 p-4 border-2 border-slate-600 shadow-inner flex flex-wrap items-end gap-6">
         <div className="flex items-end gap-4">
@@ -330,16 +402,15 @@ function GameContent() {
             const canDrawFromThis = canDraw && drawOptions.includes(color);
             const topCard = state.discardPiles[color].length > 0 ? state.discardPiles[color][state.discardPiles[color].length - 1] : null;
             const canDiscardHere = canPlayOrDiscard && selectedCard?.color === color;
+            const hasCards = (state.discardPiles[color] ?? []).length > 0;
             return (
               <div key={color} className="flex flex-col items-center">
                 <span className="text-xs text-slate-300 mb-1 font-medium">{COLOR_LABELS[color]} 捨て札</span>
                 <div
-                  className={`min-h-[3rem] min-w-[3.5rem] rounded-lg border-2 border-dashed border-slate-500 flex flex-wrap gap-0.5 p-1 items-end justify-center ${canDiscardHere ? "bg-slate-600 ring-2 ring-indigo-400" : "bg-slate-700/50"} ${canDrawFromThis ? "cursor-pointer ring-2 ring-indigo-400 hover:bg-slate-600" : ""}`}
-                  onClick={() => {
-                    if (canDiscardHere) handlePlayToDiscard(color);
-                    if (canDrawFromThis) handleDraw(color);
-                  }}
-                  role={(canDiscardHere || canDrawFromThis) ? "button" : undefined}
+                  className={`min-h-[3rem] min-w-[3.5rem] rounded-lg border-2 border-dashed border-slate-500 flex flex-wrap gap-0.5 p-1 items-end justify-center cursor-pointer ${canDiscardHere ? "bg-slate-600 ring-2 ring-indigo-400" : "bg-slate-700/50"} ${(canDrawFromThis || hasCards) ? "hover:bg-slate-600 hover:ring-2 hover:ring-indigo-400" : ""}`}
+                  onClick={() => setDiscardModalColor(color)}
+                  role="button"
+                  aria-label={`${COLOR_LABELS[color]}の捨て札を確認`}
                 >
                   {topCard && <Card card={topCard} compact />}
                 </div>
@@ -421,6 +492,18 @@ function GameContent() {
           </p>
         )}
       </section>
+
+      {/* 行動履歴ログ（最新5件） */}
+      {(state.logs ?? []).length > 0 && (
+        <section className="rounded-lg bg-slate-800/80 p-3 border border-slate-600">
+          <p className="text-xs text-slate-400 font-medium mb-1.5">行動履歴</p>
+          <ul className="text-sm text-slate-300 space-y-0.5 font-mono">
+            {(state.logs ?? []).slice(-5).map((log, i) => (
+              <li key={i}>{log}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <footer className="text-center text-slate-500 text-xs py-2">
         ※ これは非公式のファンプロジェクトであり、オリジナルのゲームとは関係ありません。

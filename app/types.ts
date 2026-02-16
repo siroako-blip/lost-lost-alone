@@ -24,6 +24,8 @@ export interface GameState {
   selectedCard: Card | null;
   phase: "play" | "draw";
   lastDiscardedColor: CardColor | null;
+  /** 行動履歴（最新5件のみ保持。古いゲームデータでは未定義のため state.logs ?? [] で参照すること） */
+  logs?: string[];
 }
 
 export const COLORS: CardColor[] = ["red", "green", "blue", "white", "yellow"];
