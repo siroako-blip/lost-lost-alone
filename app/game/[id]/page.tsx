@@ -75,7 +75,7 @@ function GameContent() {
   const isP1Draw = state?.currentPlayer === "player1" && state.phase === "draw";
   const isP2Draw = state?.currentPlayer === "player2" && state.phase === "draw";
   const drawOptions = state && state.phase === "draw" ? getDrawOptions(state) : [];
-  const gameOver = state?.deck.length === 0 ?? false;
+  const gameOver = state?.deck.length === 0;
 
   const scoreP1: PlayerScore = state ? calculatePlayerScore(state.player1Expeditions) : emptyPlayerScore;
   const scoreP2: PlayerScore = state ? calculatePlayerScore(state.player2Expeditions) : emptyPlayerScore;
