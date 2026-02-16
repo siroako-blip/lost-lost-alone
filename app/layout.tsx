@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lost Cities",
-  description: "ロストシティ ボードゲーム",
+  title: "Elemental Paths",
+  description: "精霊の道 — 5つの属性を極める旅",
 };
 
 export default function RootLayout({

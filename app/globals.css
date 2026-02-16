@@ -4,11 +4,11 @@
 
 body {
   @apply text-stone-900 antialiased;
-  /* 古代の地図・石畳を思わせる深い背景 + 微細なテクスチャ */
+  /* 精霊の道：神秘的な深い背景（slate ベース） */
   background-image:
-    radial-gradient(ellipse at 20% 20%, rgba(120, 113, 108, 0.1) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 80%, rgba(30, 58, 47, 0.15) 0%, transparent 50%),
-    linear-gradient(160deg, #1c1917 0%, #292524 30%, #1e3a2f 70%, #14532d 100%);
+    radial-gradient(ellipse at 20% 20%, rgba(71, 85, 105, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(30, 41, 59, 0.2) 0%, transparent 50%),
+    linear-gradient(160deg, #0f172a 0%, #1e293b 40%, #0f172a 100%);
   background-attachment: fixed;
   min-height: 100vh;
 }

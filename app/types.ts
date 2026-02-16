@@ -1,6 +1,6 @@
 export type CardColor = "red" | "green" | "blue" | "white" | "yellow";
 
-export type CardValue = number | "wager"; // 2-10 or wager (handshake)
+export type CardValue = number | "wager"; // 2-10 or wager (契約カード)
 
 export interface Card {
   id: string;
@@ -10,7 +10,7 @@ export interface Card {
 
 export type PlayerId = "player1" | "player2";
 
-// 各色の expedition: 先に wager のみ、その後は数字の昇順
+// 各属性の「道」: 先に wager のみ、その後は数字の昇順
 export type ExpeditionColumn = Card[];
 
 export interface GameState {
@@ -22,27 +22,28 @@ export interface GameState {
   discardPiles: Record<CardColor, Card[]>;
   currentPlayer: PlayerId;
   selectedCard: Card | null;
-  phase: "play" | "draw"; // 出札後は draw フェーズで1枚引く
-  lastDiscardedColor: CardColor | null; // 直前に捨てた色（この色の捨て札からは引けない）
+  phase: "play" | "draw";
+  lastDiscardedColor: CardColor | null;
 }
 
 export const COLORS: CardColor[] = ["red", "green", "blue", "white", "yellow"];
 
+/** 5属性の表示ラベル（Fire=火, Water=水, Wind=風, Earth=土, Light=光） */
 export const COLOR_LABELS: Record<CardColor, string> = {
-  red: "赤",
-  green: "緑",
-  blue: "青",
-  white: "白",
-  yellow: "黄",
+  red: "火",
+  blue: "水",
+  green: "風",
+  yellow: "土",
+  white: "光",
 };
 
 /** 1色分の得点内訳（結果画面用） */
 export interface ColorScoreDetail {
-  base: number;       // 数字の合計 - 20（カード0枚の色は計算しない→0）
-  wagerCount: number; // 握手カード枚数
-  multiplier: number; // 倍率（握手0→1, 1→2, 2→3, 3→4）
-  bonus: number;      // 8枚以上で+20、それ以外0
-  total: number;      // (基本点×倍率) + ボーナス
+  base: number;
+  wagerCount: number;
+  multiplier: number;
+  bonus: number;
+  total: number;
 }
 
 /** 1プレイヤー分の得点（色ごと＋合計） */
