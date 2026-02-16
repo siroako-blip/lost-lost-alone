@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply text-stone-900 antialiased;
+  /* 古代の地図・石畳を思わせる深い背景 + 微細なテクスチャ */
+  background-image:
+    radial-gradient(ellipse at 20% 20%, rgba(120, 113, 108, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(30, 58, 47, 0.15) 0%, transparent 50%),
+    linear-gradient(160deg, #1c1917 0%, #292524 30%, #1e3a2f 70%, #14532d 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
