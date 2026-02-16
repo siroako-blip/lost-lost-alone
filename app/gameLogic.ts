@@ -110,10 +110,6 @@ export function canPlayCard(
   return false;
 }
 
-function cardLabel(card: Card): string {
-  return `${COLOR_LABELS[card.color]} ${card.value === "wager" ? "契約" : card.value}`;
-}
-
 export function playCard(
   state: GameState,
   card: Card,
@@ -127,14 +123,14 @@ export function playCard(
   if (target === "discard" && color) {
     next.discardPiles = { ...state.discardPiles, [color]: [...state.discardPiles[color], card] };
     next.lastDiscardedColor = color;
-    next.logs = appendLog(state, `Player 1 discarded ${cardLabel(card)}`);
+    next.logs = appendLog(state, `P1:「${COLOR_LABELS[card.color]}」の${card.value === "wager" ? "契約" : card.value}を捨てました`);
   } else if (target === "expedition" && color) {
     next.player1Expeditions = {
       ...state.player1Expeditions,
       [color]: [...state.player1Expeditions[color], card],
     };
     next.lastDiscardedColor = null;
-    next.logs = appendLog(state, `Player 1 played ${cardLabel(card)} to board`);
+    next.logs = appendLog(state, `P1:「${COLOR_LABELS[card.color]}」の${card.value === "wager" ? "契約" : card.value}を道に置きました`);
   }
 
   next.phase = "draw";
@@ -154,14 +150,14 @@ export function playCardP2(
   if (target === "discard" && color) {
     next.discardPiles = { ...state.discardPiles, [color]: [...state.discardPiles[color], card] };
     next.lastDiscardedColor = color;
-    next.logs = appendLog(state, `Player 2 discarded ${cardLabel(card)}`);
+    next.logs = appendLog(state, `P2:「${COLOR_LABELS[card.color]}」の${card.value === "wager" ? "契約" : card.value}を捨てました`);
   } else if (target === "expedition" && color) {
     next.player2Expeditions = {
       ...state.player2Expeditions,
       [color]: [...state.player2Expeditions[color], card],
     };
     next.lastDiscardedColor = null;
-    next.logs = appendLog(state, `Player 2 played ${cardLabel(card)} to board`);
+    next.logs = appendLog(state, `P2:「${COLOR_LABELS[card.color]}」の${card.value === "wager" ? "契約" : card.value}を道に置きました`);
   }
 
   next.phase = "draw";
@@ -192,11 +188,11 @@ export function drawCard(
   }
 
   if (drawn) {
-    const playerLabel = state.currentPlayer === "player1" ? "Player 1" : "Player 2";
+    const prefix = state.currentPlayer === "player1" ? "P1:" : "P2:";
     if (source === "deck") {
-      next.logs = appendLog(state, `${playerLabel} drew from deck`);
+      next.logs = appendLog(state, `${prefix}山札から引きました`);
     } else {
-      next.logs = appendLog(state, `${playerLabel} drew from ${COLOR_LABELS[source]} discard`);
+      next.logs = appendLog(state, `${prefix}「${COLOR_LABELS[source]}」の捨て札から引きました`);
     }
     if (state.currentPlayer === "player1") {
       next.player1Hand = [...state.player1Hand, drawn];
