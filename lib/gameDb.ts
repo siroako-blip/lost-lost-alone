@@ -4,6 +4,8 @@ import type { HitBlowGameState } from "@/app/hitBlowTypes";
 import type { NoThanksGameState } from "@/app/nothanksLogic";
 import type { LoveLetterGameState } from "@/app/loveLetterLogic";
 import type { ValueTalkGameState } from "@/app/valueTalkLogic";
+import type { MidnightGameState } from "@/app/midnightLogic";
+import type { AbyssGameState } from "@/app/abyssLogic";
 
 /** lost_cities_games の1行。ゲーム状態は game_state JSON に集約 */
 export interface LostCitiesGameRow {
@@ -375,6 +377,172 @@ export async function startValueTalkGame(gameId: string, initialState: ValueTalk
 export async function updateValueTalkGameState(gameId: string, state: ValueTalkGameState): Promise<void> {
   const { error } = await supabase
     .from("value_talk_games")
+    .update({
+      game_state: state,
+      status: state.phase === "gameover" ? "finished" : "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+// ---------- Midnight Party ----------
+
+/** midnight_party_games の1行 */
+export interface MidnightPartyGameRow {
+  id: string;
+  created_at: string;
+  status: "waiting" | "playing" | "finished";
+  player_ids: string[];
+  game_state: MidnightGameState | null;
+}
+
+/** Midnight Party ゲーム作成（Host） */
+export async function createMidnightPartyGame(hostId: string): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("midnight_party_games")
+    .insert({ player_ids: [hostId], status: "waiting" })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id };
+}
+
+/** Midnight Party 1件取得 */
+export async function getMidnightPartyGame(gameId: string): Promise<MidnightPartyGameRow | null> {
+  const { data, error } = await supabase
+    .from("midnight_party_games")
+    .select("*")
+    .eq("id", gameId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw error;
+  }
+  const row = data as { player_ids: string[] | unknown };
+  return {
+    ...data,
+    player_ids: Array.isArray(row.player_ids) ? row.player_ids : [],
+  } as MidnightPartyGameRow;
+}
+
+/** Midnight Party 参加（Join）：player_ids に追加 */
+export async function joinMidnightPartyGame(gameId: string, guestId: string): Promise<void> {
+  const existing = await getMidnightPartyGame(gameId);
+  if (!existing || existing.status !== "waiting") throw new Error("参加できません");
+  if (existing.player_ids.includes(guestId)) return;
+  const nextIds = [...existing.player_ids, guestId];
+  const { error } = await supabase
+    .from("midnight_party_games")
+    .update({ player_ids: nextIds })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Midnight Party ゲーム開始（2〜10人） */
+export async function startMidnightPartyGame(
+  gameId: string,
+  initialState: MidnightGameState
+): Promise<void> {
+  const { error } = await supabase
+    .from("midnight_party_games")
+    .update({
+      game_state: initialState,
+      status: "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Midnight Party ゲーム状態を更新 */
+export async function updateMidnightPartyGameState(
+  gameId: string,
+  state: MidnightGameState
+): Promise<void> {
+  const { error } = await supabase
+    .from("midnight_party_games")
+    .update({
+      game_state: state,
+      status: state.phase === "gameover" ? "finished" : "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+// ---------- Abyss Salvage ----------
+
+/** abyss_salvage_games の1行 */
+export interface AbyssSalvageGameRow {
+  id: string;
+  created_at: string;
+  status: "waiting" | "playing" | "finished";
+  player_ids: string[];
+  game_state: AbyssGameState | null;
+}
+
+/** Abyss Salvage ゲーム作成（Host） */
+export async function createAbyssSalvageGame(hostId: string): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("abyss_salvage_games")
+    .insert({ player_ids: [hostId], status: "waiting" })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id };
+}
+
+/** Abyss Salvage 1件取得 */
+export async function getAbyssSalvageGame(gameId: string): Promise<AbyssSalvageGameRow | null> {
+  const { data, error } = await supabase
+    .from("abyss_salvage_games")
+    .select("*")
+    .eq("id", gameId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw error;
+  }
+  const row = data as { player_ids: string[] | unknown };
+  return {
+    ...data,
+    player_ids: Array.isArray(row.player_ids) ? row.player_ids : [],
+  } as AbyssSalvageGameRow;
+}
+
+/** Abyss Salvage 参加（Join）：player_ids に追加 */
+export async function joinAbyssSalvageGame(gameId: string, guestId: string): Promise<void> {
+  const existing = await getAbyssSalvageGame(gameId);
+  if (!existing || existing.status !== "waiting") throw new Error("参加できません");
+  if (existing.player_ids.includes(guestId)) return;
+  const nextIds = [...existing.player_ids, guestId];
+  const { error } = await supabase
+    .from("abyss_salvage_games")
+    .update({ player_ids: nextIds })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Abyss Salvage ゲーム開始（2〜6人） */
+export async function startAbyssSalvageGame(
+  gameId: string,
+  initialState: AbyssGameState
+): Promise<void> {
+  const { error } = await supabase
+    .from("abyss_salvage_games")
+    .update({
+      game_state: initialState,
+      status: "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Abyss Salvage ゲーム状態を更新 */
+export async function updateAbyssSalvageGameState(
+  gameId: string,
+  state: AbyssGameState
+): Promise<void> {
+  const { error } = await supabase
+    .from("abyss_salvage_games")
     .update({
       game_state: state,
       status: state.phase === "gameover" ? "finished" : "playing",
