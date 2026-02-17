@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type { GameState } from "@/app/types";
 import type { HitBlowGameState } from "@/app/hitBlowTypes";
 import type { NoThanksGameState } from "@/app/nothanksLogic";
+import type { LoveLetterGameState } from "@/app/loveLetterLogic";
 
 /** lost_cities_games の1行。ゲーム状態は game_state JSON に集約 */
 export interface LostCitiesGameRow {
@@ -218,6 +219,84 @@ export async function startNoThanksGame(gameId: string, initialState: NoThanksGa
 export async function updateNoThanksGameState(gameId: string, state: NoThanksGameState): Promise<void> {
   const { error } = await supabase
     .from("no_thanks_games")
+    .update({
+      game_state: state,
+      status: state.phase === "finished" ? "finished" : "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+// ---------- Court Intrigue (Love Letter) ----------
+
+/** love_letter_games の1行（2〜4人用） */
+export interface LoveLetterGameRow {
+  id: string;
+  created_at: string;
+  status: "waiting" | "playing" | "finished";
+  player_ids: string[];
+  game_state: LoveLetterGameState | null;
+}
+
+/** Court Intrigue ゲーム作成（Host） */
+export async function createLoveLetterGame(hostId: string): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("love_letter_games")
+    .insert({ player_ids: [hostId], status: "waiting" })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id };
+}
+
+/** Court Intrigue 1件取得 */
+export async function getLoveLetterGame(gameId: string): Promise<LoveLetterGameRow | null> {
+  const { data, error } = await supabase
+    .from("love_letter_games")
+    .select("*")
+    .eq("id", gameId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw error;
+  }
+  const row = data as { player_ids: string[] | unknown };
+  return {
+    ...data,
+    player_ids: Array.isArray(row.player_ids) ? row.player_ids : [],
+  } as LoveLetterGameRow;
+}
+
+/** Court Intrigue 参加（Join）：player_ids に追加。最大4人まで */
+export async function joinLoveLetterGame(gameId: string, guestId: string): Promise<void> {
+  const existing = await getLoveLetterGame(gameId);
+  if (!existing || existing.status !== "waiting") throw new Error("参加できません");
+  if (existing.player_ids.length >= 4) throw new Error("このゲームは満員です");
+  if (existing.player_ids.includes(guestId)) return;
+  const nextIds = [...existing.player_ids, guestId];
+  const { error } = await supabase
+    .from("love_letter_games")
+    .update({ player_ids: nextIds })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Court Intrigue ゲーム開始（2人以上で開始） */
+export async function startLoveLetterGame(gameId: string, initialState: LoveLetterGameState): Promise<void> {
+  const { error } = await supabase
+    .from("love_letter_games")
+    .update({
+      game_state: initialState,
+      status: "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Court Intrigue ゲーム状態を更新 */
+export async function updateLoveLetterGameState(gameId: string, state: LoveLetterGameState): Promise<void> {
+  const { error } = await supabase
+    .from("love_letter_games")
     .update({
       game_state: state,
       status: state.phase === "finished" ? "finished" : "playing",

@@ -36,6 +36,14 @@ export default function HomePage() {
           <span className="text-xl font-bold text-purple-100 group-hover:text-purple-200">Cursed Gifts (No Thanks!)</span>
           <p className="text-sm text-purple-300 mt-1">呪いの贈り物 — 3〜5人用</p>
         </Link>
+
+        <Link
+          href="/loveletter"
+          className="w-full px-6 py-5 rounded-xl bg-red-950/80 border-4 border-amber-700/50 shadow-lg hover:bg-red-900/80 hover:border-amber-600 transition-all text-left group"
+        >
+          <span className="text-xl font-bold text-amber-100 group-hover:text-amber-50">Court Intrigue (Love Letter)</span>
+          <p className="text-sm text-amber-200/90 mt-1">王宮の陰謀 — 2〜4人用</p>
+        </Link>
       </div>
 
       <footer className="mt-8 text-center text-stone-500 text-xs max-w-md px-4">
