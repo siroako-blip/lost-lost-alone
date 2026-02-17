@@ -44,6 +44,14 @@ export default function HomePage() {
           <span className="text-xl font-bold text-amber-100 group-hover:text-amber-50">Court Intrigue (Love Letter)</span>
           <p className="text-sm text-amber-200/90 mt-1">王宮の陰謀 — 2〜4人用</p>
         </Link>
+
+        <Link
+          href="/valuetalk"
+          className="w-full px-6 py-5 rounded-xl bg-orange-100 border-4 border-orange-300 shadow-lg hover:bg-orange-50 hover:border-orange-400 transition-all text-left group"
+        >
+          <span className="text-xl font-bold text-orange-900 group-hover:text-orange-800">Value Talk (協力)</span>
+          <p className="text-sm text-orange-600 mt-1">数字をたとえ話で伝える ito風ゲーム</p>
+        </Link>
       </div>
 
       <footer className="mt-8 text-center text-stone-500 text-xs max-w-md px-4">

@@ -3,6 +3,7 @@ import type { GameState } from "@/app/types";
 import type { HitBlowGameState } from "@/app/hitBlowTypes";
 import type { NoThanksGameState } from "@/app/nothanksLogic";
 import type { LoveLetterGameState } from "@/app/loveLetterLogic";
+import type { ValueTalkGameState } from "@/app/valueTalkLogic";
 
 /** lost_cities_games の1行。ゲーム状態は game_state JSON に集約 */
 export interface LostCitiesGameRow {
@@ -300,6 +301,83 @@ export async function updateLoveLetterGameState(gameId: string, state: LoveLette
     .update({
       game_state: state,
       status: state.phase === "finished" ? "finished" : "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+// ---------- Value Talk ----------
+
+/** value_talk_games の1行 */
+export interface ValueTalkGameRow {
+  id: string;
+  created_at: string;
+  status: "waiting" | "playing" | "finished";
+  player_ids: string[];
+  game_state: ValueTalkGameState | null;
+}
+
+/** Value Talk ゲーム作成（Host） */
+export async function createValueTalkGame(hostId: string): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("value_talk_games")
+    .insert({ player_ids: [hostId], status: "waiting" })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id };
+}
+
+/** Value Talk 1件取得 */
+export async function getValueTalkGame(gameId: string): Promise<ValueTalkGameRow | null> {
+  const { data, error } = await supabase
+    .from("value_talk_games")
+    .select("*")
+    .eq("id", gameId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw error;
+  }
+  const row = data as { player_ids: string[] | unknown };
+  return {
+    ...data,
+    player_ids: Array.isArray(row.player_ids) ? row.player_ids : [],
+  } as ValueTalkGameRow;
+}
+
+/** Value Talk 参加（Join）：player_ids に追加 */
+export async function joinValueTalkGame(gameId: string, guestId: string): Promise<void> {
+  const existing = await getValueTalkGame(gameId);
+  if (!existing || existing.status !== "waiting") throw new Error("参加できません");
+  if (existing.player_ids.includes(guestId)) return;
+  const nextIds = [...existing.player_ids, guestId];
+  const { error } = await supabase
+    .from("value_talk_games")
+    .update({ player_ids: nextIds })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Value Talk ゲーム開始（2人以上推奨だが1人でも開始可） */
+export async function startValueTalkGame(gameId: string, initialState: ValueTalkGameState): Promise<void> {
+  const { error } = await supabase
+    .from("value_talk_games")
+    .update({
+      game_state: initialState,
+      status: "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Value Talk ゲーム状態を更新 */
+export async function updateValueTalkGameState(gameId: string, state: ValueTalkGameState): Promise<void> {
+  const { error } = await supabase
+    .from("value_talk_games")
+    .update({
+      game_state: state,
+      status: state.phase === "gameover" ? "finished" : "playing",
     })
     .eq("id", gameId);
   if (error) throw error;
