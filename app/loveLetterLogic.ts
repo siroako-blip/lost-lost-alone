@@ -216,9 +216,10 @@ export function playCard(params: PlayCardParams): LoveLetterGameState | null {
     }
   }
 
-  const target = players[targetIndex];
+  const target =
+    targetIndex !== undefined ? players[targetIndex]! : player;
   if (targetIndex !== undefined && (!target || target.isEliminated)) return null;
-  if (targetIndex !== undefined && target!.isProtected && cardRank !== 5) {
+  if (targetIndex !== undefined && target.isProtected && cardRank !== 5) {
     // 僧侶で保護されている（王子は「捨てさせる」なので保護を無視するか？ 通常ルールでは王子は保護を無視しない。保護中は選べない）
     return null;
   }
