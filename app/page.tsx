@@ -68,6 +68,14 @@ export default function HomePage() {
           <span className="text-xl font-bold text-cyan-200 group-hover:text-cyan-100">Abyss Salvage (ボード)</span>
           <p className="text-sm text-cyan-300/90 mt-1">深海探検 — 遺跡を拾い酸素を共有して帰還 2〜6人</p>
         </Link>
+
+        <Link
+          href="/secretword"
+          className="w-full px-6 py-5 rounded-xl bg-emerald-950/90 border-4 border-emerald-600/50 shadow-lg hover:bg-emerald-900/80 hover:border-emerald-500 transition-all text-left group"
+        >
+          <span className="text-xl font-bold text-emerald-200 group-hover:text-emerald-100">Secret Word (会話)</span>
+          <p className="text-sm text-emerald-300/90 mt-1">ワードウルフ風 — お題を推理してウルフを当てる 3〜8人</p>
+        </Link>
       </div>
 
       <footer className="mt-8 text-center text-stone-500 text-xs max-w-md px-4">

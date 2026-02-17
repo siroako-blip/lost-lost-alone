@@ -6,6 +6,7 @@ import type { LoveLetterGameState } from "@/app/loveLetterLogic";
 import type { ValueTalkGameState } from "@/app/valueTalkLogic";
 import type { MidnightGameState } from "@/app/midnightLogic";
 import type { AbyssGameState } from "@/app/abyssLogic";
+import type { SecretWordGameState } from "@/app/secretWordLogic";
 
 /** lost_cities_games の1行。ゲーム状態は game_state JSON に集約 */
 export interface LostCitiesGameRow {
@@ -546,6 +547,89 @@ export async function updateAbyssSalvageGameState(
     .update({
       game_state: state,
       status: state.phase === "gameover" ? "finished" : "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+// ---------- Secret Word ----------
+
+/** secret_word_games の1行 */
+export interface SecretWordGameRow {
+  id: string;
+  created_at: string;
+  status: "waiting" | "playing" | "finished";
+  player_ids: string[];
+  game_state: SecretWordGameState | null;
+}
+
+/** Secret Word ゲーム作成（Host） */
+export async function createSecretWordGame(hostId: string): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("secret_word_games")
+    .insert({ player_ids: [hostId], status: "waiting" })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id };
+}
+
+/** Secret Word 1件取得 */
+export async function getSecretWordGame(gameId: string): Promise<SecretWordGameRow | null> {
+  const { data, error } = await supabase
+    .from("secret_word_games")
+    .select("*")
+    .eq("id", gameId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw error;
+  }
+  const row = data as { player_ids: string[] | unknown };
+  return {
+    ...data,
+    player_ids: Array.isArray(row.player_ids) ? row.player_ids : [],
+  } as SecretWordGameRow;
+}
+
+/** Secret Word 参加（Join）：player_ids に追加 */
+export async function joinSecretWordGame(gameId: string, guestId: string): Promise<void> {
+  const existing = await getSecretWordGame(gameId);
+  if (!existing || existing.status !== "waiting") throw new Error("参加できません");
+  if (existing.player_ids.includes(guestId)) return;
+  const nextIds = [...existing.player_ids, guestId];
+  const { error } = await supabase
+    .from("secret_word_games")
+    .update({ player_ids: nextIds })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Secret Word ゲーム開始（3〜8人） */
+export async function startSecretWordGame(
+  gameId: string,
+  initialState: SecretWordGameState
+): Promise<void> {
+  const { error } = await supabase
+    .from("secret_word_games")
+    .update({
+      game_state: initialState,
+      status: "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Secret Word ゲーム状態を更新 */
+export async function updateSecretWordGameState(
+  gameId: string,
+  state: SecretWordGameState
+): Promise<void> {
+  const { error } = await supabase
+    .from("secret_word_games")
+    .update({
+      game_state: state,
+      status: state.phase === "result" ? "finished" : "playing",
     })
     .eq("id", gameId);
   if (error) throw error;

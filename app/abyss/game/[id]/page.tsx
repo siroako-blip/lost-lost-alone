@@ -229,8 +229,9 @@ function GameContent() {
 
   const playerLabel = (i: number) => (isSpectator ? `P${i + 1}` : i === myIndex ? "あなた" : `P${i + 1}`);
   const isMyTurn = state.phase === "playing" && state.currentPlayerIndex === myIndex;
-  const currentCell = state.players[myIndex] ? state.path[state.players[myIndex].position] : null;
-  const canPickUp = currentCell?.type === "ruin";
+  const myPos = state.players[myIndex]?.position ?? -1;
+  const currentCell = myPos >= 0 ? state.path[myPos] ?? null : null;
+  const canPickUp = currentCell?.type === "ruin" || currentCell?.type === "stack";
   const canDrop = currentCell?.type === "blank" && state.players[myIndex]?.ruins.length > 0;
 
   return (
@@ -279,10 +280,31 @@ function GameContent() {
         </section>
       )}
 
-      {/* 盤面（横長リスト） */}
+      {/* 盤面（横長リスト）。先頭＝潜水艦（position -1）、以降＝path[0], path[1], ... */}
       <section className="rounded-xl bg-slate-900/60 p-4 border-2 border-cyan-500/30 overflow-x-auto">
         <p className="text-cyan-200/80 text-sm mb-2 font-medium">パス（左＝潜水艦 → 右＝最深部）</p>
         <div className="flex gap-1 min-h-[72px] items-end pb-8">
+          {/* 潜水艦マス（position -1） */}
+          <div className="flex-shrink-0 w-12 flex flex-col items-center gap-1">
+            <div className="w-11 h-14 rounded-lg border-2 flex flex-col items-center justify-center bg-cyan-900/60 border-cyan-500/50 text-cyan-200">
+              <span className="text-xs">潜水艦</span>
+            </div>
+            <div className="flex gap-0.5 justify-center flex-wrap">
+              {state.players
+                .map((p, i) => (p.position === -1 ? i : -1))
+                .filter((i) => i >= 0)
+                .map((i) => (
+                  <div
+                    key={i}
+                    className="w-5 h-5 rounded-full border-2 border-slate-900 flex items-center justify-center text-xs font-bold"
+                    style={{ backgroundColor: PLAYER_COLORS[i % PLAYER_COLORS.length] }}
+                    title={playerLabel(i)}
+                  >
+                    {i + 1}
+                  </div>
+                ))}
+            </div>
+          </div>
           {state.path.map((cell, idx) => {
             const playersHere = state.players
               .map((p, i) => (p.position === idx ? i : -1))
@@ -296,7 +318,9 @@ function GameContent() {
                   className={`w-11 h-14 rounded-lg border-2 flex flex-col items-center justify-center ${
                     cell.type === "ruin"
                       ? "bg-amber-900/60 border-amber-500/60 text-amber-200"
-                      : "bg-slate-800/80 border-slate-600 text-slate-500"
+                      : cell.type === "stack"
+                        ? "bg-amber-800/70 border-amber-600/60 text-amber-200"
+                        : "bg-slate-800/80 border-slate-600 text-slate-500"
                   }`}
                 >
                   {cell.type === "ruin" ? (
@@ -304,6 +328,8 @@ function GameContent() {
                       <span className="text-xs">Lv.{cell.level}</span>
                       <span className="text-[10px] text-slate-400">?</span>
                     </>
+                  ) : cell.type === "stack" ? (
+                    <span className="text-xs">{cell.count}枚</span>
                   ) : (
                     <span className="text-xs">—</span>
                   )}
