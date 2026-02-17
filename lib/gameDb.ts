@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { GameState } from "@/app/types";
+import type { HitBlowGameState } from "@/app/hitBlowTypes";
+import type { NoThanksGameState } from "@/app/nothanksLogic";
 
 /** lost_cities_games の1行。ゲーム状態は game_state JSON に集約 */
 export interface LostCitiesGameRow {
@@ -9,6 +11,16 @@ export interface LostCitiesGameRow {
   player1_id: string;
   player2_id: string | null;
   game_state: GameState | null;
+}
+
+/** hit_blow_games の1行 */
+export interface HitBlowGameRow {
+  id: string;
+  created_at: string;
+  status: "waiting" | "playing" | "finished";
+  player1_id: string;
+  player2_id: string | null;
+  game_state: HitBlowGameState | null;
 }
 
 /** DB保存時は selectedCard を null にする（UI専用のため） */
@@ -70,6 +82,145 @@ export async function startGame(gameId: string, initialState: GameState): Promis
     .update({
       game_state: gameStateForDb(initialState),
       status: "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+// ---------- Hit and Blow ----------
+
+/** Hit and Blow ゲーム作成（Host） */
+export async function createHitBlowGame(hostId: string): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("hit_blow_games")
+    .insert({ player1_id: hostId, status: "waiting" })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id };
+}
+
+/** Hit and Blow 1件取得 */
+export async function getHitBlowGame(gameId: string): Promise<HitBlowGameRow | null> {
+  const { data, error } = await supabase
+    .from("hit_blow_games")
+    .select("*")
+    .eq("id", gameId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw error;
+  }
+  return data as HitBlowGameRow;
+}
+
+/** Hit and Blow 参加（Join）：player2_id をセット */
+export async function joinHitBlowGame(gameId: string, guestId: string): Promise<void> {
+  const { error } = await supabase
+    .from("hit_blow_games")
+    .update({ player2_id: guestId })
+    .eq("id", gameId)
+    .is("player2_id", null);
+  if (error) throw error;
+}
+
+/** Hit and Blow ゲーム開始：game_state を書き込む */
+export async function startHitBlowGame(gameId: string, initialState: HitBlowGameState): Promise<void> {
+  const { error } = await supabase
+    .from("hit_blow_games")
+    .update({
+      game_state: initialState,
+      status: "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Hit and Blow ゲーム状態を更新（秘密設定・予想送信時など） */
+export async function updateHitBlowGameState(gameId: string, state: HitBlowGameState): Promise<void> {
+  const { error } = await supabase
+    .from("hit_blow_games")
+    .update({
+      game_state: state,
+      status: state.winner ? "finished" : "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+// ---------- Cursed Gifts (No Thanks!) ----------
+
+/** no_thanks_games の1行（3〜5人用） */
+export interface NoThanksGameRow {
+  id: string;
+  created_at: string;
+  status: "waiting" | "playing" | "finished";
+  player_ids: string[];
+  game_state: NoThanksGameState | null;
+}
+
+/** Cursed Gifts ゲーム作成（Host） */
+export async function createNoThanksGame(hostId: string): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("no_thanks_games")
+    .insert({ player_ids: [hostId], status: "waiting" })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id };
+}
+
+/** Cursed Gifts 1件取得 */
+export async function getNoThanksGame(gameId: string): Promise<NoThanksGameRow | null> {
+  const { data, error } = await supabase
+    .from("no_thanks_games")
+    .select("*")
+    .eq("id", gameId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw error;
+  }
+  const row = data as { player_ids: string[] | unknown };
+  return {
+    ...data,
+    player_ids: Array.isArray(row.player_ids) ? row.player_ids : [],
+  } as NoThanksGameRow;
+}
+
+/** Cursed Gifts 参加（Join）：player_ids に追加。最大5人まで */
+export async function joinNoThanksGame(gameId: string, guestId: string): Promise<void> {
+  const existing = await getNoThanksGame(gameId);
+  if (!existing || existing.status !== "waiting") throw new Error("参加できません");
+  if (existing.player_ids.length >= 5) throw new Error("このゲームは満員です");
+  if (existing.player_ids.includes(guestId)) return; // 既に参加済み
+  const nextIds = [...existing.player_ids, guestId];
+  const { error } = await supabase
+    .from("no_thanks_games")
+    .update({ player_ids: nextIds })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Cursed Gifts ゲーム開始：game_state を書き込む（3人以上で開始） */
+export async function startNoThanksGame(gameId: string, initialState: NoThanksGameState): Promise<void> {
+  const { error } = await supabase
+    .from("no_thanks_games")
+    .update({
+      game_state: initialState,
+      status: "playing",
+    })
+    .eq("id", gameId);
+  if (error) throw error;
+}
+
+/** Cursed Gifts ゲーム状態を更新 */
+export async function updateNoThanksGameState(gameId: string, state: NoThanksGameState): Promise<void> {
+  const { error } = await supabase
+    .from("no_thanks_games")
+    .update({
+      game_state: state,
+      status: state.phase === "finished" ? "finished" : "playing",
     })
     .eq("id", gameId);
   if (error) throw error;

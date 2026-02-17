@@ -17,10 +17,10 @@ import {
 import { Card } from "@/app/components/Card";
 import { updateGameState } from "@/lib/gameDb";
 import { useGameRealtime } from "@/lib/useGameRealtime";
+import { usePresence } from "@/lib/usePresence";
 
-type PlayerRole = "player1" | "player2";
+type PlayerRole = "player1" | "player2" | "spectator";
 
-/** types.PlayerScore に合わせた空のスコア（データ未読込時用） */
 function getEmptyPlayerScore(): PlayerScore {
   const emptyExpeditions = COLORS.reduce(
     (acc, c) => ({ ...acc, [c]: [] }),
@@ -36,14 +36,26 @@ function GameContent() {
   const pid = searchParams.get("pid") ?? "";
 
   const { gameData, loading, error } = useGameRealtime(gameId);
+  const host_id = gameData?.player1_id ?? null;
+  const guest_id = gameData?.player2_id ?? null;
+  const { opponentStatus, player1Status, player2Status } = usePresence(
+    gameId,
+    pid || null,
+    host_id,
+    guest_id
+  );
   const [selectedCard, setSelectedCard] = useState<CardType | null>(null);
+  const [showDisconnectBanner, setShowDisconnectBanner] = useState(false);
+  const [showReconnectMessage, setShowReconnectMessage] = useState(false);
+  const prevOpponentStatus = useRef<"online" | "offline" | null>(null);
+  const hasSeenOpponentOnline = useRef(false);
   const [resultModalOpen, setResultModalOpen] = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const prevDeckLength = useRef<number | null>(null);
 
-  // プレイ時間タイマー（created_at から経過 MM:SS）
   useEffect(() => {
     if (!gameData?.created_at) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -55,15 +67,13 @@ function GameContent() {
 
   const emptyPlayerScore = useMemo(() => getEmptyPlayerScore(), []);
 
-  const host_id = gameData?.player1_id ?? null;
-  const guest_id = gameData?.player2_id ?? null;
   const state: GameState | null = gameData?.game_state ?? null;
-  const myRole: PlayerRole | null =
+  const myRole: PlayerRole =
     pid && host_id && pid === host_id
       ? "player1"
       : pid && guest_id && pid === guest_id
         ? "player2"
-        : null;
+        : "spectator";
 
   useEffect(() => {
     if (state && prevDeckLength.current !== null && prevDeckLength.current > 0 && state.deck.length === 0) {
@@ -71,6 +81,23 @@ function GameContent() {
     }
     prevDeckLength.current = state?.deck.length ?? null;
   }, [state?.deck.length]);
+
+  useEffect(() => {
+    if (opponentStatus === null) return;
+    if (opponentStatus === "online") hasSeenOpponentOnline.current = true;
+    const prev = prevOpponentStatus.current;
+    prevOpponentStatus.current = opponentStatus;
+    if (prev === "online" && opponentStatus === "offline" && hasSeenOpponentOnline.current) {
+      setShowDisconnectBanner(true);
+      setShowReconnectMessage(false);
+    }
+    if (prev === "offline" && opponentStatus === "online") {
+      setShowDisconnectBanner(false);
+      setShowReconnectMessage(true);
+      const t = setTimeout(() => setShowReconnectMessage(false), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [opponentStatus]);
 
   const applyAndSave = useCallback(
     async (nextState: GameState) => {
@@ -125,48 +152,67 @@ function GameContent() {
       <div className="min-h-screen flex flex-col p-4 gap-4 items-center justify-center bg-stone-100">
         <h1 className="text-2xl font-bold text-stone-900">Elemental Paths</h1>
         <p className="text-red-600">ゲームの取得に失敗しました</p>
-        <Link href="/" className="text-amber-600 underline font-medium">ロビーに戻る</Link>
+        <Link href="/elemental" className="text-amber-600 underline font-medium">ロビーに戻る</Link>
       </div>
     );
   }
 
   if (gameData.status === "waiting") {
     const isHost = pid === host_id;
+    const isSpectatorWaiting = myRole === "spectator";
     return (
-      <div className="min-h-screen flex flex-col p-4 gap-4 items-center justify-center bg-stone-100">
-        <h1 className="text-2xl font-bold text-stone-900">Elemental Paths</h1>
-        {isHost ? (
+      <div className="min-h-screen flex flex-col p-4 gap-4 items-center justify-center bg-stone-200">
+        <h1 className="text-2xl font-bold text-stone-900 font-serif">Elemental Paths</h1>
+        {isSpectatorWaiting ? (
+          <p className="text-stone-700">ゲームはまだ開始していません。Hostが相手の参加を待っています。</p>
+        ) : isHost ? (
           <>
-            <p className="text-stone-600">ゲームIDを相手に伝えて待機しています</p>
-            <div className="rounded-xl bg-orange-50 p-6 border-4 border-amber-700/50 shadow-lg">
-              <p className="text-xs text-stone-500 mb-1">ゲームID</p>
-              <p className="text-xl font-mono font-bold text-stone-900 break-all">{gameData.id}</p>
+            <p className="text-stone-700">ゲームIDを相手に伝えて待機しています</p>
+            <div className="rounded-xl bg-stone-100 p-6 border-4 border-amber-800 shadow-2xl shadow-inner">
+              <p className="text-xs text-stone-600 mb-1">ゲームID</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-xl font-mono font-bold text-stone-900 break-all">{gameData.id}</p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(gameData.id);
+                      setCopyFeedback(true);
+                      setTimeout(() => setCopyFeedback(false), 2000);
+                    } catch { /* ignore */ }
+                  }}
+                  className="px-2 py-1 rounded border-2 border-stone-800 bg-amber-50 hover:bg-amber-100 text-stone-800 text-sm font-medium"
+                >
+                  {copyFeedback ? "コピーしました" : "📋 コピー"}
+                </button>
+              </div>
             </div>
           </>
         ) : (
           <p className="text-stone-600">参加処理中…</p>
         )}
-        <Link href="/" className="text-amber-600 underline font-medium">ロビーに戻る</Link>
+        <Link href="/elemental" className="text-amber-700 underline font-medium">ロビーに戻る</Link>
       </div>
     );
   }
 
-  if (!state || myRole === null) {
+  if (!state) {
     return (
       <div className="min-h-screen flex flex-col p-4 gap-4 items-center justify-center bg-stone-100">
         <h1 className="text-2xl font-bold text-stone-900">Elemental Paths</h1>
-        <p className="text-stone-600">このゲームに参加していません</p>
-        <Link href="/" className="text-amber-600 underline font-medium">ロビーに戻る</Link>
+        <p className="text-stone-600">ゲームデータを読み込めません</p>
+        <Link href="/elemental" className="text-amber-600 underline font-medium">ロビーに戻る</Link>
       </div>
     );
   }
 
+  const isSpectator = myRole === "spectator";
   const myHand = myRole === "player1" ? state.player1Hand : state.player2Hand;
   const opponentHandLength = myRole === "player1" ? state.player2Hand.length : state.player1Hand.length;
   const myExpeditions = myRole === "player1" ? state.player1Expeditions : state.player2Expeditions;
   const opponentExpeditions = myRole === "player1" ? state.player2Expeditions : state.player1Expeditions;
-  const canPlayOrDiscard = isMyTurnPlay && selectedCard;
-  const canDraw = isMyTurnDraw && drawOptions.length > 0;
+  const canPlayOrDiscard = !isSpectator && isMyTurnPlay && selectedCard;
+  const canDraw = !isSpectator && isMyTurnDraw && drawOptions.length > 0;
 
   const handlePlayToExpedition = (color: CardColor) => {
     if (!canPlayOrDiscard || !selectedCard || selectedCard.color !== color || isSubmitting) return;
@@ -196,21 +242,34 @@ function GameContent() {
 
   const formatLogLine = (log: string, index: number) => {
     const n = index + 1;
-    const who = log.startsWith("P1:") ? (myRole === "player1" ? "自分" : "相手") : (myRole === "player1" ? "相手" : "自分");
+    const who = log.startsWith("P1:") ? (isSpectator ? "Player 1" : (myRole === "player1" ? "自分" : "相手")) : (isSpectator ? "Player 2" : (myRole === "player1" ? "相手" : "自分"));
     const text = log.replace(/^P[12]:/, "");
     return `[${n}手前] ${who}: ${text}`;
   };
   const displayLogs = (state.logs ?? []).slice(-3).reverse();
 
+  const StatusIcon = ({ status }: { status: "online" | "offline" | null }) =>
+    status === "online" ? <span title="オンライン">🟢</span> : <span title="オフライン">🔴</span>;
+
   return (
-    <div className="min-h-screen flex flex-col p-4 gap-4 bg-gradient-to-b from-stone-100 to-orange-50/60">
+    <div className="min-h-screen flex flex-col p-4 gap-4 bg-stone-200">
+      {showDisconnectBanner && (
+        <div className="w-full py-2 px-4 rounded-lg bg-red-600 text-white font-medium text-center shadow-lg" role="alert">
+          ⚠️ 相手との接続が切れました
+        </div>
+      )}
+      {showReconnectMessage && !showDisconnectBanner && (
+        <div className="w-full py-2 px-4 rounded-lg bg-emerald-600 text-white font-medium text-center shadow-lg" role="status">
+          再接続しました
+        </div>
+      )}
       {gameOver && resultModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/70 p-4">
-          <div className="bg-stone-100 rounded-2xl shadow-2xl border-4 border-amber-700/60 max-w-2xl w-full max-h-[90vh] overflow-auto p-6 text-stone-900">
-            <h2 className="text-xl font-bold text-center mb-4 text-amber-800">ゲーム終了 — 結果</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/80 p-4">
+          <div className="bg-stone-100 rounded-2xl shadow-2xl border-4 border-amber-800 max-w-2xl w-full max-h-[90vh] overflow-auto p-6 text-stone-900">
+            <h2 className="text-xl font-bold text-center mb-4 text-amber-900 font-serif">ゲーム終了 — 結果</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div className="rounded-xl bg-blue-50 p-4 border-4 border-amber-800/40 shadow-md">
-                <h3 className="font-semibold text-blue-800 mb-2">自分</h3>
+              <div className="rounded-xl bg-blue-50 p-4 border-4 border-amber-800 shadow-inner">
+                <h3 className="font-semibold text-blue-800 mb-2 font-serif">{isSpectator ? "Player 1" : "自分"}</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
                     <thead>
@@ -233,22 +292,22 @@ function GameContent() {
                             <td className="text-right py-1 px-1 text-stone-800">{d.wagerCount}枚</td>
                             <td className="text-right py-1 px-1 text-stone-800">×{d.multiplier}</td>
                             <td className="text-right py-1 px-1 text-stone-800">{d.bonus}</td>
-                            <td className="text-right py-1 pl-2 font-medium text-stone-900">{d.total}</td>
+                            <td className="text-right py-1 pl-2 font-medium text-stone-900 font-serif tabular-nums">{d.total}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                     <tfoot>
-                      <tr className="border-t-2 border-amber-800/40 font-bold text-stone-900">
-                        <td className="py-2 pr-2" colSpan={5}>合計スコア</td>
-                        <td className="text-right py-2 pl-2">{selfTotal}</td>
+                      <tr className="border-t-2 border-amber-800 font-bold text-stone-900">
+                        <td className="py-2 pr-2 font-serif" colSpan={5}>合計スコア</td>
+                        <td className="text-right py-2 pl-2 font-serif tabular-nums">{selfTotal}</td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               </div>
-              <div className="rounded-xl bg-red-50 p-4 border-4 border-amber-800/40 shadow-md">
-                <h3 className="font-semibold text-red-800 mb-2">相手</h3>
+              <div className="rounded-xl bg-red-50 p-4 border-4 border-amber-800 shadow-inner">
+                <h3 className="font-semibold text-red-800 mb-2 font-serif">{isSpectator ? "Player 2" : "相手"}</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
                     <thead>
@@ -271,15 +330,15 @@ function GameContent() {
                             <td className="text-right py-1 px-1 text-stone-800">{d.wagerCount}枚</td>
                             <td className="text-right py-1 px-1 text-stone-800">×{d.multiplier}</td>
                             <td className="text-right py-1 px-1 text-stone-800">{d.bonus}</td>
-                            <td className="text-right py-1 pl-2 font-medium text-stone-900">{d.total}</td>
+                            <td className="text-right py-1 pl-2 font-medium text-stone-900 font-serif tabular-nums">{d.total}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                     <tfoot>
-                      <tr className="border-t-2 border-amber-800/40 font-bold text-stone-900">
-                        <td className="py-2 pr-2" colSpan={5}>合計スコア</td>
-                        <td className="text-right py-2 pl-2">{opponentTotal}</td>
+                      <tr className="border-t-2 border-amber-800 font-bold text-stone-900">
+                        <td className="py-2 pr-2 font-serif" colSpan={5}>合計スコア</td>
+                        <td className="text-right py-2 pl-2 font-serif tabular-nums">{opponentTotal}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -287,11 +346,12 @@ function GameContent() {
               </div>
             </div>
             <p className="text-center text-stone-700 mb-4 font-medium">
-              {selfTotal > opponentTotal && "自分の勝ち！"}
-              {selfTotal < opponentTotal && "相手の勝ち！"}
-              {selfTotal === opponentTotal && "同点！"}
+              {isSpectator
+                ? (scoreP1.total > scoreP2.total ? "Player 1 の勝ち！" : scoreP1.total < scoreP2.total ? "Player 2 の勝ち！" : "同点！")
+                : (selfTotal > opponentTotal && "自分の勝ち！") || (selfTotal < opponentTotal && "相手の勝ち！") || (selfTotal === opponentTotal && "同点！")}
             </p>
             <div className="flex justify-center gap-3 flex-wrap">
+              {!isSpectator && (
               <button
                 type="button"
                 onClick={handleRematch}
@@ -300,6 +360,7 @@ function GameContent() {
               >
                 もう一度遊ぶ（再戦）
               </button>
+              )}
               <button
                 type="button"
                 onClick={() => setResultModalOpen(false)}
@@ -307,7 +368,7 @@ function GameContent() {
               >
                 盤面を見る（閉じる）
               </button>
-              <Link href="/" className="px-6 py-3 rounded-xl bg-amber-700 text-white font-medium hover:bg-amber-600 border-2 border-amber-800 shadow-lg inline-block">
+              <Link href="/elemental" className="px-6 py-3 rounded-xl bg-amber-700 text-white font-medium hover:bg-amber-600 border-2 border-amber-800 shadow-lg inline-block">
                 ロビーに戻る
               </Link>
             </div>
@@ -317,9 +378,14 @@ function GameContent() {
 
       <div className="flex flex-row flex-wrap items-center justify-between gap-2 sm:gap-4 w-full">
         <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4">
-          <h1 className="text-2xl font-bold text-center text-stone-900 drop-shadow-sm">Elemental Paths</h1>
+          {isSpectator && (
+            <span className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-bold border-2 border-amber-800 shadow-lg">
+              👀 観戦モード
+            </span>
+          )}
+          <h1 className="text-2xl font-bold text-center text-stone-900 font-serif">Elemental Paths</h1>
           {gameData?.created_at && (
-            <span className="text-stone-700 font-mono text-sm tabular-nums bg-stone-200/90 px-3 py-1.5 rounded-lg border-2 border-amber-700/50 shadow" title="プレイ時間">
+            <span className="text-stone-800 font-mono text-sm tabular-nums bg-stone-100 px-3 py-1.5 rounded-lg border-4 border-amber-800 shadow-inner" title="プレイ時間">
               ⏱ {timerLabel}
             </span>
           )}
@@ -332,23 +398,22 @@ function GameContent() {
               結果を再表示
             </button>
           )}
-          <Link href="/" className="text-stone-600 text-sm underline hover:text-amber-600 font-medium">ロビーに戻る</Link>
+          <Link href="/elemental" className="text-stone-700 text-sm underline hover:text-amber-700 font-medium">ロビーに戻る</Link>
         </div>
         <button
           type="button"
           onClick={() => setShowRules(true)}
-          className="px-3 py-1.5 rounded-lg border-2 border-amber-600 text-amber-700 font-medium hover:bg-amber-50 text-sm shadow"
+          className="px-3 py-1.5 rounded-lg border-4 border-amber-800 text-amber-900 font-medium hover:bg-amber-50 text-sm shadow-lg"
         >
           ？ ルール
         </button>
       </div>
 
-      {/* ルールモーダル（ロビーと同じ内容） */}
       {showRules && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/70 backdrop-blur-sm">
-          <div className="bg-stone-100 text-stone-900 rounded-2xl border-4 border-amber-700/60 w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-            <div className="bg-amber-100/80 p-4 border-b-4 border-amber-700/50 flex justify-between items-center sticky top-0">
-              <h2 className="text-xl font-bold text-amber-800">精霊の道 — ルール</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/80 backdrop-blur-sm">
+          <div className="bg-stone-100 text-stone-900 rounded-2xl border-4 border-amber-800 w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="bg-amber-100/90 p-4 border-b-4 border-stone-800 flex justify-between items-center sticky top-0">
+              <h2 className="text-xl font-bold text-amber-900 font-serif">精霊の道 — ルール</h2>
               <button onClick={() => setShowRules(false)} className="p-1 hover:bg-amber-200/80 rounded-full transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -405,10 +470,91 @@ function GameContent() {
         </div>
       )}
 
-      {/* 相手エリア：赤系アクセント */}
-      <section className="rounded-xl bg-red-50/90 p-4 border-4 border-amber-800/50 shadow-lg">
-        <p className="text-sm font-medium text-stone-800 mb-2">
-          相手
+      {isSpectator ? (
+        <>
+          <section className="rounded-xl bg-blue-50/90 p-4 border-4 border-amber-800 shadow-2xl shadow-inner pointer-events-none select-none">
+            <p className="text-sm font-medium text-stone-800 mb-2 flex items-center gap-1.5">Player 1 {player1Status !== null && <StatusIcon status={player1Status} />}</p>
+            <p className="text-xs text-stone-600 mb-1 font-medium">手札</p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {state.player1Hand.map((c) => (
+                <Card key={c.id} card={c} compact />
+              ))}
+            </div>
+            <p className="text-xs text-stone-600 mb-1 font-medium">道</p>
+            <div className="flex flex-wrap gap-4">
+              {COLORS.map((color) => {
+                const pts = scoreP1.perColor[color].total;
+                return (
+                  <div key={color} className="flex flex-col items-center gap-0.5">
+                    <span className="text-xs text-stone-700 font-medium">{COLOR_LABELS[color]}</span>
+                    <span className={`text-sm font-bold tabular-nums ${pts > 0 ? "text-emerald-600" : pts < 0 ? "text-red-600" : "text-stone-500"}`}>{pts > 0 ? `+${pts}` : pts}点</span>
+                    <div className="flex flex-col items-center min-h-[2.5rem] min-w-[2.25rem] rounded-lg border-4 border-dashed border-amber-800/40 p-1 bg-stone-200/80">
+                      {state.player1Expeditions[color].map((c, i) => (
+                        <div key={c.id} className={i === 0 ? "" : "-mt-10"}>
+                          <Card card={c} compact />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+          <section className="rounded-xl bg-stone-100 p-4 border-4 border-amber-800 shadow-2xl shadow-inner flex flex-wrap items-end gap-6 pointer-events-none select-none">
+            <div className="flex items-end gap-4">
+              {COLORS.map((color) => {
+                const topCard = state.discardPiles[color].length > 0 ? state.discardPiles[color][state.discardPiles[color].length - 1] : null;
+                return (
+                  <div key={color} className="flex flex-col items-center">
+                    <span className="text-xs text-stone-700 mb-1 font-medium">{COLOR_LABELS[color]} 捨て札</span>
+                    <div className="min-h-[3rem] min-w-[3.5rem] rounded-lg border-4 border-dashed border-amber-800/50 flex flex-wrap gap-0.5 p-1 items-end justify-center bg-stone-300/80">
+                      {topCard && <Card card={topCard} compact />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-xs text-stone-700 mb-1 font-medium">山札</span>
+              <div className="h-20 w-14 rounded-lg border-4 border-amber-800/40 flex items-center justify-center text-sm font-bold bg-stone-300 text-stone-600">
+                {state.deck.length}
+              </div>
+            </div>
+          </section>
+          <section className="rounded-xl bg-red-50/90 p-4 border-4 border-amber-800 shadow-2xl shadow-inner flex-1 pointer-events-none select-none">
+            <p className="text-sm font-medium text-stone-800 mb-2 flex items-center gap-1.5">Player 2 {player2Status !== null && <StatusIcon status={player2Status} />}</p>
+            <p className="text-xs text-stone-600 mb-1 font-medium">手札</p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {state.player2Hand.map((c) => (
+                <Card key={c.id} card={c} compact />
+              ))}
+            </div>
+            <p className="text-xs text-stone-600 mb-1 font-medium">道</p>
+            <div className="flex flex-wrap gap-4">
+              {COLORS.map((color) => {
+                const pts = scoreP2.perColor[color].total;
+                return (
+                  <div key={color} className="flex flex-col items-center gap-0.5">
+                    <span className="text-xs text-stone-700 font-medium">{COLOR_LABELS[color]}</span>
+                    <span className={`text-sm font-bold tabular-nums ${pts > 0 ? "text-emerald-600" : pts < 0 ? "text-red-600" : "text-stone-500"}`}>{pts > 0 ? `+${pts}` : pts}点</span>
+                    <div className="flex flex-col items-center min-h-[2.5rem] min-w-[2.25rem] rounded-lg border-4 border-dashed border-amber-800/40 p-1 bg-stone-200/80">
+                      {state.player2Expeditions[color].map((c, i) => (
+                        <div key={c.id} className={i === 0 ? "" : "-mt-10"}>
+                          <Card card={c} compact />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+      <section className="rounded-xl bg-red-50/90 p-4 border-4 border-amber-800 shadow-2xl shadow-inner">
+        <p className="text-sm font-medium text-stone-800 mb-2 flex items-center gap-1.5">
+          相手 {opponentStatus !== null && <StatusIcon status={opponentStatus} />}
           {((myRole === "player1" && isP2Turn) || (myRole === "player2" && isP1Turn)) && (
             <span className="ml-2 text-amber-600 font-semibold">← 手番です</span>
           )}
@@ -445,8 +591,7 @@ function GameContent() {
         </div>
       </section>
 
-      {/* 中央: 捨て札・山札（クリックで即ドロー or 即捨て） */}
-      <section className="rounded-xl bg-stone-200/80 p-4 border-4 border-amber-800/60 shadow-lg flex flex-wrap items-end gap-6">
+      <section className="rounded-xl bg-stone-100 p-4 border-4 border-amber-800 shadow-2xl shadow-inner flex flex-wrap items-end gap-6">
         <div className="flex items-end gap-4">
           {COLORS.map((color) => {
             const canDrawFromThis = canDraw && drawOptions.includes(color);
@@ -483,8 +628,7 @@ function GameContent() {
         </div>
       </section>
 
-      {/* 自分エリア：青・緑系アクセント */}
-      <section className="rounded-xl bg-blue-50/90 p-4 border-4 border-amber-800/50 shadow-lg flex-1">
+      <section className="rounded-xl bg-blue-50/90 p-4 border-4 border-amber-800 shadow-2xl shadow-inner flex-1">
         <p className="text-sm font-medium text-stone-800 mb-2">
           自分
           {isMyTurnPlay && <span className="ml-2 text-amber-600 font-semibold">← 手番です。手札を選んでから置き場をクリック</span>}
@@ -544,10 +688,11 @@ function GameContent() {
           </p>
         )}
       </section>
+        </>
+      )}
 
-      {/* 行動履歴ログ（最新3件・日本語・何手前） */}
       {displayLogs.length > 0 && (
-        <section className="rounded-lg bg-stone-200/90 p-3 border-2 border-amber-800/40 shadow-inner">
+        <section className="rounded-lg bg-stone-100 p-3 border-4 border-stone-800 shadow-inner">
           <p className="text-xs text-stone-600 font-medium mb-1.5">行動履歴</p>
           <ul className="text-sm text-stone-800 space-y-0.5">
             {displayLogs.map((log, i) => (
@@ -564,7 +709,7 @@ function GameContent() {
   );
 }
 
-export default function GamePage() {
+export default function ElementalGamePage() {
   return (
     <Suspense
       fallback={
