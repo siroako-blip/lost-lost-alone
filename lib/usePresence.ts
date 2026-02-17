@@ -24,7 +24,7 @@ export function usePresence(
     const channelName = `room_presence_${gameId}`;
     const channel = supabase.channel(
       channelName,
-      userId ? { config: { presence: { key: userId } } } : {}
+      userId ? { config: { presence: { key: userId } } } : { config: {} }
     );
 
     channel.on("presence", { event: "sync" }, () => {
