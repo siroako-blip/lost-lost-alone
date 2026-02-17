@@ -16,6 +16,7 @@ import {
 } from "@/app/loveLetterLogic";
 import { useLoveLetterRealtime } from "@/lib/useLoveLetterRealtime";
 import { startLoveLetterGame, updateLoveLetterGameState } from "@/lib/gameDb";
+import { RuleBook } from "@/components/RuleBook";
 
 type PlayerRole = number | "spectator";
 
@@ -214,6 +215,7 @@ function GameContent() {
 
   return (
     <div className="min-h-screen flex flex-col p-4 gap-4 bg-gradient-to-b from-red-950 to-amber-950/80 text-amber-100">
+      <RuleBook gameType="loveletter" />
       <div className="flex flex-wrap items-center justify-between gap-2 w-full">
         <div className="flex items-center gap-2 flex-wrap">
           {isSpectator && (

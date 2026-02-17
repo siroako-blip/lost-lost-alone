@@ -8,6 +8,7 @@ import { playCard, updateDescription, changeTheme, resetGame } from "@/app/value
 import { useValueTalkRealtime } from "@/lib/useValueTalkRealtime";
 import { startValueTalkGame, updateValueTalkGameState } from "@/lib/gameDb";
 import { createInitialValueTalkState } from "@/app/valueTalkLogic";
+import { RuleBook } from "@/components/RuleBook";
 
 type PlayerRole = number | "spectator";
 
@@ -190,6 +191,7 @@ function GameContent() {
 
   return (
     <div className="min-h-screen flex flex-col p-4 gap-4 bg-gradient-to-b from-orange-50 to-amber-50 text-orange-900">
+      <RuleBook gameType="valuetalk" />
       <div className="flex flex-wrap items-center justify-between gap-2 w-full">
         <div className="flex items-center gap-2 flex-wrap">
           {isSpectator && (
