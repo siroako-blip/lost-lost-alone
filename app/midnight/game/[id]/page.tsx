@@ -9,6 +9,7 @@ import {
   callMidnight,
   startNextRound,
   createInitialMidnightState,
+  restartGame,
 } from "@/app/midnightLogic";
 import { useMidnightRealtime } from "@/lib/useMidnightRealtime";
 import {
@@ -105,6 +106,18 @@ function GameContent() {
   const handleNextRound = useCallback(async () => {
     if (!gameId || !state) return;
     const next = startNextRound(state);
+    if (!next) return;
+    setIsSubmitting(true);
+    try {
+      await updateMidnightPartyGameState(gameId, next);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [gameId, state]);
+
+  const handleRestart = useCallback(async () => {
+    if (!gameId || !state) return;
+    const next = restartGame(state);
     if (!next) return;
     setIsSubmitting(true);
     try {
@@ -245,7 +258,7 @@ function GameContent() {
         )}
       </section>
 
-      {/* チャレンジ結果 */}
+      {/* チャレンジ結果（全員のカードを表向きで表示・自分のカードも表示） */}
       {state.phase === "challenge_result" && (
         <div className="rounded-xl bg-fuchsia-900/50 border-2 border-fuchsia-500/60 p-6 text-center space-y-4">
           <p className="text-2xl font-bold text-fuchsia-200">
@@ -258,16 +271,25 @@ function GameContent() {
               </>
             )}
           </p>
+          <p className="text-sm text-fuchsia-300/90">全員の手札（結果発表のため全公開）</p>
           {state.revealedHands && (
             <div className="flex flex-wrap justify-center gap-4 text-left">
               {state.revealedHands.map((hand, i) => (
-                <div key={i} className="rounded-lg bg-purple-900/80 px-3 py-2 border border-fuchsia-500/30">
-                  <p className="text-xs text-purple-400 mb-1">{playerLabel(i)}</p>
-                  <div className="flex gap-1 flex-wrap">
+                <div
+                  key={i}
+                  className={`rounded-lg px-4 py-3 border ${
+                    i === myIndex ? "bg-fuchsia-800/60 border-fuchsia-400/60" : "bg-purple-900/80 border-fuchsia-500/30"
+                  }`}
+                >
+                  <p className="text-sm font-bold text-fuchsia-200 mb-1.5">
+                    {playerLabel(i)}
+                    {i === myIndex && <span className="ml-2 text-fuchsia-400 text-xs">（あなた）</span>}
+                  </p>
+                  <div className="flex gap-1.5 flex-wrap">
                     {hand.map((c, j) => (
                       <span
                         key={j}
-                        className="inline-flex items-center justify-center min-w-[2rem] py-0.5 px-1 rounded bg-purple-800 text-fuchsia-200 font-bold text-sm"
+                        className="inline-flex items-center justify-center min-w-[2.5rem] py-1 px-1.5 rounded bg-purple-800 text-fuchsia-100 font-bold text-base"
                       >
                         {cardLabel(c)}
                       </span>
@@ -290,9 +312,9 @@ function GameContent() {
         </div>
       )}
 
-      {/* ゲームオーバー */}
+      {/* ゲームオーバー（最終手札を全公開・誰が何を持っていたか確認可能） */}
       {state.phase === "gameover" && (
-        <div className="rounded-xl bg-purple-900/60 border-2 border-fuchsia-500/50 p-6 text-center space-y-2">
+        <div className="rounded-xl bg-purple-900/60 border-2 border-fuchsia-500/50 p-6 text-center space-y-4">
           <p className="text-xl font-bold text-fuchsia-200">ゲームオーバー</p>
           <p className="text-purple-300">
             勝者:{" "}
@@ -301,12 +323,54 @@ function GameContent() {
               .filter(Boolean)
               .join(", ") || "—"}
           </p>
-          <Link
-            href="/midnight"
-            className="inline-block mt-4 px-6 py-3 rounded-xl bg-fuchsia-500 text-white font-bold hover:bg-fuchsia-400"
-          >
-            ロビーに戻る
-          </Link>
+          {(state.revealedHands ?? state.hands).length > 0 && (
+            <div className="text-left">
+              <p className="text-sm font-bold text-fuchsia-200 mb-2">最終手札（全員分・自分のカードも表示）</p>
+              <div className="flex flex-wrap justify-center gap-4">
+                {(state.revealedHands ?? state.hands).map((hand, i) => (
+                  <div
+                    key={i}
+                    className={`rounded-lg px-4 py-3 border ${
+                      i === myIndex ? "bg-fuchsia-800/60 border-fuchsia-400/60" : "bg-purple-900/80 border-fuchsia-500/30"
+                    }`}
+                  >
+                    <p className="text-sm font-bold text-fuchsia-200 mb-1.5">
+                      {playerLabel(i)}
+                      {i === myIndex && <span className="ml-2 text-fuchsia-400 text-xs">（あなた）</span>}
+                    </p>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {hand.map((c, j) => (
+                        <span
+                          key={j}
+                          className="inline-flex items-center justify-center min-w-[2.5rem] py-1 px-1.5 rounded bg-purple-800 text-fuchsia-100 font-bold text-base"
+                        >
+                          {cardLabel(c)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-3 justify-center">
+            {!isSpectator && (
+              <button
+                type="button"
+                onClick={handleRestart}
+                disabled={!!isSubmitting}
+                className="px-6 py-3 rounded-xl bg-cyan-600 text-white font-bold hover:bg-cyan-500 border-2 border-cyan-400 disabled:opacity-50"
+              >
+                🔄 もう一度遊ぶ
+              </button>
+            )}
+            <Link
+              href="/midnight"
+              className="inline-block px-6 py-3 rounded-xl bg-fuchsia-500 text-white font-bold hover:bg-fuchsia-400"
+            >
+              ロビーに戻る
+            </Link>
+          </div>
         </div>
       )}
 
@@ -330,8 +394,8 @@ function GameContent() {
                   )}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {i === myIndex ? (
-                    // 自分のカードは絶対に見せない：枚数だけ「？」で表示
+                  {(i === myIndex && state.phase === "bidding") ? (
+                    // ビッド中のみ自分のカードは隠す（結果・ゲームオーバー時は下のブロックで全公開）
                     hand.map((_, j) => (
                       <div
                         key={j}

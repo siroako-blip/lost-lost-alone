@@ -5,11 +5,13 @@
 
 export type MidnightCard = number | "x2" | "MAX=0" | "?";
 
-/** 36枚デッキ: 0〜10各2枚, 15・20各2枚, -5・-10各2枚, x2・MAX=0・? 各2枚 */
-const NUMBERS_0_10 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+/** デッキ: 10刻みの大きな数字＋特殊。数字は互いに近すぎずハッタリしやすい構成 */
+const NUMBERS_10_80 = [10, 20, 30, 40, 50, 60, 70, 80];
 export const FULL_DECK: MidnightCard[] = [
-  ...NUMBERS_0_10.flatMap((n) => [n, n]),
-  15, 15, 20, 20, -5, -5, -10, -10,
+  ...NUMBERS_10_80.flatMap((n) => [n, n]),
+  10, 20, 30, 40, 50, 60, 70, 80,
+  -10, -10, -20, -20,
+  0, 0, 0,
   "x2", "x2", "MAX=0", "MAX=0", "?", "?",
 ];
 
@@ -98,8 +100,8 @@ const MAX_PLAYERS = 10;
 
 /** 1ラウンドで各プレイヤーに配る枚数。山札に ? 用の残りを確保 */
 function cardsPerPlayer(playerCount: number): number {
-  const reserve = 6; // ? など用
-  return Math.floor((36 - reserve) / playerCount);
+  const reserve = 5; // ? 解決用
+  return Math.floor((FULL_DECK.length - reserve) / playerCount);
 }
 
 export function createInitialMidnightState(playerCount: number): MidnightGameState {
@@ -225,4 +227,12 @@ export function startNextRound(state: MidnightGameState): MidnightGameState | nu
     lastLoserIndex: undefined,
     revealedHands: undefined,
   };
+}
+
+/**
+ * 再戦：ゲーム終了後、同じメンバーで最初から遊び直す。ライフ・デッキ・ラウンドをリセット。
+ */
+export function restartGame(state: MidnightGameState): MidnightGameState | null {
+  if (state.phase !== "gameover") return null;
+  return createInitialMidnightState(state.hands.length);
 }

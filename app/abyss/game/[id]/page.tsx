@@ -6,11 +6,11 @@ import Link from "next/link";
 import type { AbyssGameState } from "@/app/abyssLogic";
 import {
   applyOxygenAndMaybeFinishRound,
-  switchToReturning,
+  switchDirectionToUp,
   rollDice,
   movePlayer,
-  pickUpRuin,
-  dropRuin,
+  pickUpLoot,
+  putDownLoot,
   endTurnAndMaybeFinishRound,
   createInitialAbyssState,
   OXYGEN_MAX,
@@ -88,9 +88,9 @@ function GameContent() {
     }
   }, [gameId, state, isSpectator]);
 
-  const handleSwitchReturning = useCallback(async () => {
+  const handleSwitchDirectionUp = useCallback(async () => {
     if (!gameId || !state || isSpectator || myIndex < 0) return;
-    const next = switchToReturning(state, myIndex);
+    const next = switchDirectionToUp(state, myIndex);
     if (!next) return;
     setIsSubmitting(true);
     try {
@@ -115,7 +115,7 @@ function GameContent() {
 
   const handlePickUp = useCallback(async () => {
     if (!gameId || !state || isSpectator || myIndex < 0) return;
-    const next = pickUpRuin(state, myIndex);
+    const next = pickUpLoot(state, myIndex);
     if (!next) return;
     setIsSubmitting(true);
     try {
@@ -125,9 +125,9 @@ function GameContent() {
     }
   }, [gameId, state, myIndex, isSpectator]);
 
-  const handleDrop = useCallback(async () => {
+  const handlePutDown = useCallback(async () => {
     if (!gameId || !state || isSpectator || myIndex < 0) return;
-    const next = dropRuin(state, myIndex);
+    const next = putDownLoot(state, myIndex);
     if (!next) return;
     setIsSubmitting(true);
     try {
@@ -232,7 +232,7 @@ function GameContent() {
   const myPos = state.players[myIndex]?.position ?? -1;
   const currentCell = myPos >= 0 ? state.path[myPos] ?? null : null;
   const canPickUp = currentCell?.type === "ruin" || currentCell?.type === "stack";
-  const canDrop = currentCell?.type === "blank" && state.players[myIndex]?.ruins.length > 0;
+  const canDrop = currentCell?.type === "blank" && state.players[myIndex]?.holdingLoot.length > 0;
 
   return (
     <div className="min-h-screen flex flex-col p-4 gap-4 bg-gradient-to-b from-slate-950 via-blue-950 to-slate-950 text-cyan-100">
@@ -273,9 +273,9 @@ function GameContent() {
       {!isSpectator && state.players[myIndex] && (
         <section className="rounded-lg bg-slate-800/60 px-4 py-2 border border-cyan-500/30 flex items-center gap-2">
           <span className="text-cyan-200 font-medium">持ち物（重さ）:</span>
-          <span className="font-bold text-cyan-300">{state.players[myIndex].ruins.length} 個の遺跡</span>
-          {state.players[myIndex].ruins.length > 0 && (
-            <span className="text-slate-400 text-sm">→ 移動時は出目から {state.players[myIndex].ruins.length} 引く</span>
+          <span className="font-bold text-cyan-300">{state.players[myIndex].holdingLoot.length} 個の遺跡</span>
+          {state.players[myIndex].holdingLoot.length > 0 && (
+            <span className="text-slate-400 text-sm">→ 移動時は出目から {state.players[myIndex].holdingLoot.length} 引く</span>
           )}
         </section>
       )}
@@ -361,7 +361,7 @@ function GameContent() {
           <div className="flex flex-wrap gap-4">
             {state.players.map((p, i) => (
               <span key={i} className="px-3 py-1.5 rounded-lg bg-slate-800 text-cyan-200 font-medium">
-                {playerLabel(i)}: 総得点 {p.totalScore}
+                {playerLabel(i)}: 総得点 {p.score}
               </span>
             ))}
           </div>
@@ -385,7 +385,7 @@ function GameContent() {
           <p className="text-cyan-200/90">最終得点</p>
           <div className="flex flex-wrap gap-4">
             {state.players
-              .map((p, i) => ({ i, score: p.totalScore }))
+              .map((p, i) => ({ i, score: p.score }))
               .sort((a, b) => b.score - a.score)
               .map(({ i, score }) => (
                 <span key={i} className="px-3 py-1.5 rounded-lg bg-cyan-900/50 text-cyan-100 font-bold">
@@ -428,10 +428,10 @@ function GameContent() {
               )}
               {state.oxygenConsumedThisTurn && !state.movedThisTurn && (
                 <>
-                  {state.players[myIndex].direction === "descending" && (
+                  {state.players[myIndex].direction === "down" && (
                     <button
                       type="button"
-                      onClick={handleSwitchReturning}
+                      onClick={handleSwitchDirectionUp}
                       disabled={isSubmitting}
                       className="px-4 py-2 rounded-lg bg-teal-600 text-white font-bold hover:bg-teal-500 border border-teal-500 disabled:opacity-50"
                     >
@@ -463,7 +463,7 @@ function GameContent() {
                   {canDrop && (
                     <button
                       type="button"
-                      onClick={handleDrop}
+                      onClick={handlePutDown}
                       disabled={isSubmitting}
                       className="px-4 py-2 rounded-lg bg-slate-600 text-white font-bold hover:bg-slate-500 disabled:opacity-50"
                     >
