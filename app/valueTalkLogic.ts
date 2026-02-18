@@ -432,9 +432,43 @@ export function changeTheme(state: ValueTalkGameState): ValueTalkGameState | nul
   };
 }
 
-/** 再戦：同じプレイヤー・同じ難易度で初期状態にリセット */
-export function resetGame(state: ValueTalkGameState): ValueTalkGameState {
+/**
+ * 再戦：ゲーム終了後に同じメンバーで最初から遊び直す。
+ * - phase を playing、life を初期値(3)、level を 1 にリセット
+ * - played_cards を空に、deck を 1〜100 で再生成・シャッフル
+ * - themeChangeUsed を false にし、getNewTheme で新しいお題をセット
+ * - 参加人数に応じて手札を再配布（2人:3枚ずつ、3人:2枚ずつ、4人:2,2,1,1 など）
+ */
+export function restartGame(state: ValueTalkGameState): ValueTalkGameState {
   const playerCount = state.players.length;
   const difficulty = state.difficulty ?? "MIXED";
-  return createInitialValueTalkState(playerCount, difficulty);
+  const fullDeck = shuffle(Array.from({ length: 100 }, (_, i) => i + 1));
+  const newTheme = getNewTheme(difficulty, 1);
+  const handCounts = getHandCounts(playerCount);
+  const players: PlayerState[] = [];
+  for (let i = 0; i < playerCount; i++) {
+    const hand: number[] = [];
+    for (let j = 0; j < handCounts[i]!; j++) {
+      if (fullDeck.length > 0) hand.push(fullDeck.shift()!);
+    }
+    players.push({ hand, descriptions: {} });
+  }
+  return {
+    ...state,
+    phase: "playing",
+    life: 3,
+    level: 1,
+    theme: newTheme,
+    deck: fullDeck,
+    played_cards: [],
+    players,
+    lastFailure: null,
+    themeChangeUsed: false,
+    difficulty: state.difficulty ?? "MIXED",
+  };
+}
+
+/** 再戦（restartGame のエイリアス。互換用） */
+export function resetGame(state: ValueTalkGameState): ValueTalkGameState {
+  return restartGame(state);
 }

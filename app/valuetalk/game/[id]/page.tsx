@@ -4,7 +4,7 @@ import { useCallback, useState, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { ValueTalkGameState } from "@/app/valueTalkLogic";
-import { playCard, updateDescription, changeTheme, resetGame } from "@/app/valueTalkLogic";
+import { playCard, updateDescription, changeTheme, restartGame } from "@/app/valueTalkLogic";
 import { useValueTalkRealtime } from "@/lib/useValueTalkRealtime";
 import { startValueTalkGame, updateValueTalkGameState } from "@/lib/gameDb";
 import { createInitialValueTalkState } from "@/app/valueTalkLogic";
@@ -116,7 +116,7 @@ function GameContent() {
 
   const handleRematch = useCallback(async () => {
     if (!gameId || !state) return;
-    const next = resetGame(state);
+    const next = restartGame(state);
     setIsSubmitting(true);
     try {
       await updateValueTalkGameState(gameId, next);
@@ -311,13 +311,17 @@ function GameContent() {
         ))}
       </div>
 
-      {/* ゲーム終了（gameover / cleared）・再戦ボタン */}
-      {(state.phase === "gameover" || state.phase === "cleared") && (
+      {/* ゲーム終了（gameover / cleared / failed）・再戦ボタン */}
+      {(state.phase === "gameover" || state.phase === "cleared" || state.phase === "failed") && (
         <div className="rounded-xl bg-amber-100 border-4 border-orange-400 p-6 text-center space-y-4">
           {state.phase === "gameover" ? (
             <>
               <p className="text-xl font-bold text-red-900 font-serif">ゲームオーバー</p>
               <p className="text-red-800 mt-1">ライフが0になりました…</p>
+            </>
+          ) : state.phase === "failed" ? (
+            <>
+              <p className="text-xl font-bold text-red-900 font-serif">失敗…</p>
             </>
           ) : (
             <>
@@ -329,9 +333,9 @@ function GameContent() {
               type="button"
               onClick={handleRematch}
               disabled={isSubmitting}
-              className="px-6 py-3 rounded-xl bg-orange-400 text-white font-bold hover:bg-orange-500 border-2 border-orange-500 shadow-lg disabled:opacity-50"
+              className="px-6 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 border-2 border-blue-500 shadow-lg disabled:opacity-50 text-base"
             >
-              🔄 もう一度遊ぶ
+              🔄 もう一度遊ぶ（新しいお題）
             </button>
           )}
         </div>
