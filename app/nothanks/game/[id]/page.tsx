@@ -10,9 +10,12 @@ import {
   takeCard,
   calculateScores,
   getWinnerIndex,
+  scoreForCards,
+  restartGame,
 } from "@/app/nothanksLogic";
 import { useNoThanksRealtime } from "@/lib/useNoThanksRealtime";
 import { startNoThanksGame, updateNoThanksGameState } from "@/lib/gameDb";
+import { RuleBook } from "@/components/RuleBook";
 
 type PlayerRole = number | "spectator"; // number = player index (0-based)
 
@@ -90,6 +93,18 @@ function GameContent() {
       setIsSubmitting(false);
     }
   }, [gameId, state, myIndex, playerIds.length, isSpectator]);
+
+  const handleRestart = useCallback(async () => {
+    if (!gameId || !state || state.phase !== "finished") return;
+    const next = restartGame(state);
+    if (!next) return;
+    setIsSubmitting(true);
+    try {
+      await updateNoThanksGameState(gameId, next);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [gameId, state]);
 
   if (loading || !gameId) {
     return (
@@ -171,6 +186,7 @@ function GameContent() {
 
   return (
     <div className="min-h-screen flex flex-col p-4 gap-4 bg-gradient-to-b from-purple-950 to-stone-900 text-stone-100">
+      <RuleBook gameType="nothanks" />
       <div className="flex flex-wrap items-center justify-between gap-2 w-full">
         <div className="flex items-center gap-2 flex-wrap">
           {isSpectator && (
@@ -271,16 +287,52 @@ function GameContent() {
         })}
       </div>
 
-      {/* ゲーム終了時: 勝者表示 */}
-      {state.phase === "finished" && winnerIndex !== null && (
-        <div className="rounded-xl bg-amber-900/40 p-4 border-4 border-amber-600/60 text-center">
-          <p className="text-lg font-bold text-amber-200 font-serif">
-            {isSpectator
-              ? `Player ${winnerIndex + 1} の勝ち！`
-              : winnerIndex === myIndex
-                ? "あなたの勝ち！"
-                : `Player ${winnerIndex + 1} の勝ち！`}
-          </p>
+      {/* ゲーム終了時: 結果発表（スコア内訳）＋再戦ボタン */}
+      {state.phase === "finished" && (
+        <div className="rounded-xl bg-amber-900/40 p-6 border-4 border-amber-600/60 space-y-4">
+          {winnerIndex !== null && (
+            <p className="text-lg font-bold text-amber-200 font-serif text-center">
+              {isSpectator
+                ? `Player ${winnerIndex + 1} の勝ち！`
+                : winnerIndex === myIndex
+                  ? "あなたの勝ち！"
+                  : `Player ${winnerIndex + 1} の勝ち！`}
+            </p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {state.playerCards.map((cards, i) => {
+              const chips = state.playerChips[i] ?? 0;
+              const cardPenalty = scoreForCards(cards);
+              const finalScore = chips - cardPenalty;
+              const label = isSpectator ? `Player ${i + 1}` : (i === myIndex ? "あなた" : `Player ${i + 1}`);
+              return (
+                <div
+                  key={i}
+                  className={`rounded-lg p-3 border-2 ${
+                    i === winnerIndex ? "bg-amber-800/50 border-amber-500" : "bg-purple-900/50 border-purple-600/60"
+                  }`}
+                >
+                  <p className="text-sm font-bold text-amber-100 mb-2">{label}</p>
+                  <p className="text-xs text-purple-200 mb-1">
+                    獲得カード: {cards.length === 0 ? "（なし）" : `[${cards.slice().sort((a, b) => a - b).join(", ")}]`}
+                  </p>
+                  <p className="text-xs text-purple-200 mb-1">カード合計（マイナス点）: {cardPenalty}</p>
+                  <p className="text-xs text-amber-200 mb-1">残ったチップ（プラス点）: {chips}</p>
+                  <p className="text-sm font-bold text-amber-100 mt-2">最終スコア: {finalScore}</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-center pt-2">
+            <button
+              type="button"
+              onClick={handleRestart}
+              disabled={isSubmitting}
+              className="px-6 py-3 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-500 border-2 border-purple-500 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              🔄 もう一度遊ぶ
+            </button>
+          </div>
         </div>
       )}
 

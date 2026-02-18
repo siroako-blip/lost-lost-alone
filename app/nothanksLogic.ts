@@ -113,8 +113,8 @@ export function takeCard(
   return next;
 }
 
-/** 連番は最小値のみカウントして合計点を計算 */
-function scoreForCards(cards: number[]): number {
+/** 連番は最小値のみカウントして合計点を計算（カードのマイナス点＝ペナルティ） */
+export function scoreForCards(cards: number[]): number {
   if (cards.length === 0) return 0;
   const sorted = [...cards].sort((a, b) => a - b);
   let sum = 0;
@@ -152,4 +152,24 @@ export function getWinnerIndex(state: NoThanksGameState): number | null {
     }
   }
   return bestIndex;
+}
+
+/**
+ * 再戦：同じメンバーで最初から遊び直す。
+ * phase を playing、deck を再生成、potChips を 0、全プレイヤーのチップ 11 枚・カード空・手番は先頭に。
+ */
+export function restartGame(state: NoThanksGameState): NoThanksGameState | null {
+  if (state.phase !== "finished") return null;
+  const playerCount = state.playerChips.length;
+  const deck = createDeck();
+  const top = deck.pop()!;
+  return {
+    phase: "playing",
+    deck,
+    currentCard: top,
+    potChips: 0,
+    currentPlayerIndex: 0,
+    playerChips: Array.from({ length: playerCount }, () => CHIPS_PER_PLAYER),
+    playerCards: Array.from({ length: playerCount }, () => []),
+  };
 }

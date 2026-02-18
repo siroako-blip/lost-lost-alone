@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 
-export type RuleBookGameType = "loveletter" | "valuetalk" | "midnight" | "abyss";
+export type RuleBookGameType = "loveletter" | "valuetalk" | "midnight" | "abyss" | "nothanks";
 
 const RULE_CONTENT: Record<
   RuleBookGameType,
@@ -138,6 +138,40 @@ const RULE_CONTENT: Record<
       {
         heading: "帰り道",
         body: <p>一度「戻る」を選択すると、もう潜れない。往路でお宝を拾い、復路で潜水艦まで戻ろう。</p>,
+      },
+    ],
+  },
+  nothanks: {
+    title: "Cursed Gifts (No Thanks!)",
+    subtitle: "呪いの贈り物を押し付け合うゲーム",
+    sections: [
+      {
+        heading: "目的",
+        body: (
+          <p>
+            カードの数字はマイナス点、チップはプラス点。連番のカードは「最小の数字だけ」マイナスになる。最終スコア（チップ − カード合計）が最も高い人が勝ちです。
+          </p>
+        ),
+      },
+      {
+        heading: "流れ",
+        body: (
+          <ul className="list-disc pl-5 space-y-2 text-stone-700">
+            <li>3〜5人でプレイ。カードは3〜35のうち24枚を使用（9枚は除外）。</li>
+            <li>各自チップ11枚スタート。場に1枚カードが表向きで出る。</li>
+            <li>手番では「チップを1枚払ってパス」か「そのカード（＋場のチップ）を引き取る」のどちらか。</li>
+            <li>チップが0の人はパスできないので、必ずカードを取る。</li>
+            <li>山札がなくなり、最後のカードが誰かに取られたらゲーム終了。</li>
+          </ul>
+        ),
+      },
+      {
+        heading: "得点",
+        body: (
+          <p>
+            獲得したカードは連番ごとに「最小の数字1つ」だけマイナスにカウント。残ったチップ1枚＝＋1点。最終スコア ＝ 残りチップ − カード合計（マイナス点）です。
+          </p>
+        ),
       },
     ],
   },
