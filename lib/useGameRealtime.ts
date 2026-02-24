@@ -62,7 +62,11 @@ export function useGameRealtime(
 
     // 2. リアルタイム監視（postgres_changes + broadcast）
     const channel = supabase
-      .channel(`room_${gameId}`)
+      .channel(`room_${gameId}`, {
+        config: {
+          broadcast: { self: true },
+        },
+      })
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "lost_cities_games", filter: `id=eq.${gameId}` },
