@@ -53,6 +53,10 @@ function GameContent() {
     }, EMOTE_DISPLAY_DURATION_MS);
   }, []);
 
+  const { gameData, loading, error, sendEmote } = useGameRealtime(gameId, {
+    onReceiveEmote: handleReceiveEmote,
+  });
+
   const handleSendEmote = useCallback(
     (emoji: string) => {
       const now = Date.now();
@@ -63,9 +67,6 @@ function GameContent() {
     [sendEmote]
   );
 
-  const { gameData, loading, error, sendEmote } = useGameRealtime(gameId, {
-    onReceiveEmote: handleReceiveEmote,
-  });
   const host_id = gameData?.player1_id ?? null;
   const guest_id = gameData?.player2_id ?? null;
   const { opponentStatus, player1Status, player2Status } = usePresence(
