@@ -19,6 +19,11 @@ import { updateGameState } from "@/lib/gameDb";
 import { useGameRealtime } from "@/lib/useGameRealtime";
 import { usePresence } from "@/lib/usePresence";
 
+const EMOTES = ["👀", "👏", "😱", "🔥"] as const;
+const EMOTE_COOLDOWN_MS = 500;
+const EMOTE_DISPLAY_DURATION_MS = 2500;
+
+type ActiveEmote = { id: string; emoji: string; x: number; y: number };
 type PlayerRole = "player1" | "player2" | "spectator";
 
 function getEmptyPlayerScore(): PlayerScore {
@@ -35,7 +40,32 @@ function GameContent() {
   const gameId = typeof params.id === "string" ? params.id : null;
   const pid = searchParams.get("pid") ?? "";
 
-  const { gameData, loading, error } = useGameRealtime(gameId);
+  const [activeEmotes, setActiveEmotes] = useState<ActiveEmote[]>([]);
+  const emoteCooldownUntil = useRef<number>(0);
+
+  const handleReceiveEmote = useCallback((payload: { emoji: string }) => {
+    const id = `emote-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const x = 5 + Math.random() * 18;
+    const y = 20 + Math.random() * 45;
+    setActiveEmotes((prev) => [...prev, { id, emoji: payload.emoji, x, y }]);
+    setTimeout(() => {
+      setActiveEmotes((prev) => prev.filter((e) => e.id !== id));
+    }, EMOTE_DISPLAY_DURATION_MS);
+  }, []);
+
+  const handleSendEmote = useCallback(
+    (emoji: string) => {
+      const now = Date.now();
+      if (now < emoteCooldownUntil.current) return;
+      emoteCooldownUntil.current = now + EMOTE_COOLDOWN_MS;
+      sendEmote(emoji);
+    },
+    [sendEmote]
+  );
+
+  const { gameData, loading, error, sendEmote } = useGameRealtime(gameId, {
+    onReceiveEmote: handleReceiveEmote,
+  });
   const host_id = gameData?.player1_id ?? null;
   const guest_id = gameData?.player2_id ?? null;
   const { opponentStatus, player1Status, player2Status } = usePresence(
@@ -252,7 +282,40 @@ function GameContent() {
     status === "online" ? <span title="オンライン">🟢</span> : <span title="オフライン">🔴</span>;
 
   return (
-    <div className="min-h-screen flex flex-col p-4 gap-4 bg-stone-200">
+    <div className="min-h-screen flex flex-col p-4 gap-4 bg-stone-200 relative">
+      {/* エモート表示オーバーレイ（浮かび上がり＋フェードアウト） */}
+      <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden>
+        {activeEmotes.map((e) => (
+          <div
+            key={e.id}
+            className="emote-float absolute text-4xl opacity-90"
+            style={{
+              right: `${e.x}%`,
+              bottom: `${e.y}%`,
+              animation: `emoteFloat ${EMOTE_DISPLAY_DURATION_MS}ms ease-out forwards`,
+            }}
+          >
+            {e.emoji}
+          </div>
+        ))}
+      </div>
+
+      {/* エモート送信ボタン（右下） */}
+      <div className="fixed bottom-6 right-6 z-30 flex gap-2">
+        {EMOTES.map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => handleSendEmote(emoji)}
+            className="w-12 h-12 rounded-full bg-stone-100 border-2 border-amber-800 shadow-lg hover:bg-amber-50 hover:scale-110 active:scale-95 transition-transform flex items-center justify-center text-2xl disabled:opacity-50"
+            title="リアクションを送る"
+            aria-label={`エモート ${emoji} を送る`}
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+
       {showDisconnectBanner && (
         <div className="w-full py-2 px-4 rounded-lg bg-red-600 text-white font-medium text-center shadow-lg" role="alert">
           ⚠️ 相手との接続が切れました
