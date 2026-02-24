@@ -71,8 +71,8 @@ export function useGameRealtime(
       .on(
         "broadcast",
         { event: "emote" },
-        (payload: { payload?: EmotePayload }) => {
-          const data = payload?.payload;
+        (payload: any) => {
+          const data = payload?.payload as EmotePayload | undefined;
           if (data?.emoji) {
             onReceiveEmoteRef.current?.(data);
           }
